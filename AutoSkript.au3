@@ -13,6 +13,7 @@
 ; cislo v priz materialu Edit34
 ; radek pricina zmen Edit2
 ; varianta (pro check F11) = Edit15
+; Platnost do = Edit29
 
 #include <ButtonConstants.au3>
 #include <EditConstants.au3>
@@ -98,14 +99,19 @@ If ControlGetFocus("Udržování technolog. postupů","") <> "Edit1" Then MouseC
 ;Poslání čísla svazku
 For $i = 0 to $iPocetRadku - 2
    Global $indexpole = $i
-   If IsArray($aSvazky) Then
-	  Send($aSvazky[$i])
-   Else
-	  Send($aSvazky)
-   EndIf
+   Send($aSvazky[$i])
    Send("{ENTER}")
-   Local $error = WinWaitActive("Výběr záhlaví technol. postupu","", 10)
-   ErrorHandler($error)
+   Local $sBarva = 0
+   Local $error = WinWaitActive("Výběr záhlaví technol. postupu","", 5)
+   If $error = 0 Then
+	  $sBarva = PixelGetColor(877,83, $hWnd)
+	  If $sBarva = "16711680" Then
+;~ 		 Logsvazku($aSvazky[$i], $sBarva)
+		 ContinueLoop
+	  Else
+		 ErrorHandler($error)
+	  EndIf
+   EndIf
    Global $iPocetAktTP = 0
    Send("^{PGUP}")
    Sleep(100)
@@ -125,26 +131,28 @@ For $i = 0 to $iPocetRadku - 2
 	  Local $iPoziceBaru2 = DllStructGetData($tSCROLLBARINFO, "xyThumbTop")
    Until $iPoziceBaru1 = $iPoziceBaru2
    Do
-	  $tSCROLLBARINFO = _GUIScrollBars_GetScrollBarInfoEx($hwndCtrl, $OBJID_CLIENT)
+	  Local $tSCROLLBARINFO = _GUIScrollBars_GetScrollBarInfoEx($hwndCtrl, $OBJID_CLIENT)
+	  Local $iPoziceBaru1 = DllStructGetData($tSCROLLBARINFO, "xyThumbTop")
 	  Send("{PGUP}")
 	  Sleep(100)
-   Until DllStructGetData($tSCROLLBARINFO, "xyThumbTop") = "17"
+	  $tSCROLLBARINFO = _GUIScrollBars_GetScrollBarInfoEx($hwndCtrl, $OBJID_CLIENT)
+	  Local $iPoziceBaru2 = DllStructGetData($tSCROLLBARINFO, "xyThumbTop")
+   Until $iPoziceBaru1 = $iPoziceBaru2
    ;Výběr prvního aktivního TP (do žádného dalšíhon program nevstupuje). V případě více aktivních TP, je toto zapsáno do logu
    While ControlGetText("Výběr záhlaví technol. postupu","","Edit33") <> 1
 	  Send("{DOWN}")
 	  Sleep(100)
    Wend
    Send("^{RIGHT}")
-   ProhledaniTP()
+   ProhledaniTP($sBarva, $aSvazky[$i])
    Send("{F1}")
    $error = WinWaitActive("Udržování technolog. postupů", "", 10)
    ErrorHandler($error)
-   LogSvazku($aSvazky[$i])
 Next
 MsgBox($MB_ICONINFORMATION,"SUCCESS!!!","Všechny zadané svazky byly změněny!")
 EndFunc
 
-Func ProhledaniTP()
+Func ProhledaniTP($sBarva, $sSvazek)
    AutoItSetOption("MouseCoordMode", 2)
    AutoItSetOption("WinTitleMatchMode", 2)
    Local $hWnd = WinActivate("[CLASS:OWL_Window]","")
@@ -161,9 +169,12 @@ Func ProhledaniTP()
    Do
 	  Local $hwndCtrl = ControlGetHandle($hWnd,"","[CLASS:ScrollBar; INSTANCE:1]")
 	  Local $tSCROLLBARINFO = _GUIScrollBars_GetScrollBarInfoEx($hwndCtrl, $OBJID_CLIENT)
+	  Local $iPoziceBaru1 = DllStructGetData($tSCROLLBARINFO, "xyThumbTop")
 	  Send("{PGUP}")
 	  Sleep(100)
-   Until DllStructGetData($tSCROLLBARINFO, "xyThumbTop") = "17"
+	  $tSCROLLBARINFO = _GUIScrollBars_GetScrollBarInfoEx($hwndCtrl, $OBJID_CLIENT)
+	  Local $iPoziceBaru2 = DllStructGetData($tSCROLLBARINFO, "xyThumbTop")
+   Until $iPoziceBaru1 = $iPoziceBaru2
    Global $iPocet4820 = 0
    Global $iPocet3218 = 0
    ;Prohledávání pro zadaný materiál. Proběhne tolikrát, kolikrát byl počet materiálu zadán v datovém excelu. V souboru je nutné mít min 2 řádky
@@ -190,10 +201,19 @@ Func ProhledaniTP()
 		 WEnd
 		 If $sMaterial = "9.4820.000" Then
 			$iPocet4820 = $iPocet4820 + 1
+			If $iPocet4820 = 1 Then
+			   Local $sNaslednik4820 = ZmenaMat($sMaterial)
+			Else
+			   Local $sNaslednik4820 = $sNaslednik4820 & ", " & ZmenaMat($sMaterial)
+			EndIf
 		 Else
 			$iPocet3218 = $iPocet3218 + 1
+			If $siPocet3218 = 1 Then
+			   Local $sNaslednik3218 = ZmenaMat($sMaterial) & ", "
+			Else
+			   Local $sNaslednik3218 = $sNaslednik3218 & ZmenaMat($sMaterial) & ", "
+			EndIf
 		 EndIf
-		 ZmenaMat($sMaterial)
 	  WEnd
    Send("{F1}")
    $error = WinWaitActive("Evidovat příčinu změny","", 10)
@@ -204,6 +224,7 @@ Func ProhledaniTP()
    Send("{ENTER}")
    $error = WinWaitActive("Výběr záhlaví technol. postupu","", 10)
    ErrorHandler($error)
+   LogSvazku($sSvazek, $sNaslednik4820, $sNaslednik3128, $sBarva)
 EndFunc
 
 Func ZmenaMat($sNovyMat)
@@ -284,9 +305,13 @@ Func ZmenaMat($sNovyMat)
    Do
 	  Local $hwndCtrl = ControlGetHandle($hWnd,"","[CLASS:ScrollBar; INSTANCE:1]")
 	  Local $tSCROLLBARINFO = _GUIScrollBars_GetScrollBarInfoEx($hwndCtrl, $OBJID_CLIENT)
+	  Local $iPoziceBaru1 = DllStructGetData($tSCROLLBARINFO, "xyThumbTop")
 	  Send("{PGUP}")
 	  Sleep(100)
-   Until DllStructGetData($tSCROLLBARINFO, "xyThumbTop") = "17"
+	  $tSCROLLBARINFO = _GUIScrollBars_GetScrollBarInfoEx($hwndCtrl, $OBJID_CLIENT)
+	  Local $iPoziceBaru2 = DllStructGetData($tSCROLLBARINFO, "xyThumbTop")
+   Until $iPoziceBaru1 = $iPoziceBaru2
+   Return $sNaslednik
 EndFunc
 
 Func ErrorHandler($error)
@@ -296,7 +321,7 @@ Func ErrorHandler($error)
    EndIf
 EndFunc
 
-Func Logsvazku($sSvazek)
+Func Logsvazku($sSvazek, $sNaslednik4820, $sNaslednik3218, $sChyba)
    Local $hndl = FileOpen(@ScriptDir & "\LogSvazků.txt",1)
    If $hndl = -1 Then
 	  MsgBox($MB_ICONERROR,"Chyba","Nebyl nalezen soubor logu!")
@@ -305,10 +330,14 @@ Func Logsvazku($sSvazek)
    If $indexpole = 0 Then
 	  FileWrite($hndl, @CRLF & _Now() & @CRLF)
    EndIf
-   If $iPocetAktTP > 1 Then
-	  FileWrite($hndl, $sSvazek & ";" & $iPocet3218 & ";" & $iPocet4820 & "; více akt. postupů" & @CRLF)
+   If $sChyba > 0 Then
+	  FileWrite($hndl, $sSvazek & "; svazek neexistuje nebo je blokován uživatelem" & @CRLF)
    Else
-	  FileWrite($hndl, $sSvazek & ";" & $iPocet3218 & ";" & $iPocet4820 & @CRLF)
+	  If $iPocetAktTP > 1 Then
+		 FileWrite($hndl, $sSvazek & ";" & $iPocet3218 & ";" & $iPocet4820 & "; více akt. postupů" & @CRLF)
+	  Else
+		 FileWrite($hndl, $sSvazek & ";" & $iPocet3218 & ";" & $iPocet4820 & @CRLF)
+	  EndIf
    EndIf
    FileClose($hndl)
 EndFunc
